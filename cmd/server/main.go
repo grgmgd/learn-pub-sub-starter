@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -37,8 +36,40 @@ func main() {
 		routing.PlayingState{IsPaused: true},
 	)
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt) // provide channel and signals to listen to, otherwise all signals will be relayed
-	<-ch                            // block until signal is received
-	fmt.Println("Received interrupt signal, exiting...")
+	pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		"game_logs.*",
+		pubsub.QueueTypeDurable,
+	)
+
+	for {
+		input := gamelogic.GetInput()
+		switch input[0] {
+		case "pause":
+
+			fmt.Println("Pausing the game...")
+			pubsub.PublishJSON(channel,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{IsPaused: true},
+			)
+		case "resume":
+			fmt.Println("Resuming the game...")
+			pubsub.PublishJSON(channel,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{IsPaused: false},
+			)
+		case "quit":
+			fmt.Println("Quitting the game...")
+			return
+		case "help":
+			gamelogic.PrintServerHelp()
+		default:
+			fmt.Println("Unknown command, please try again.")
+		}
+	}
+
 }
